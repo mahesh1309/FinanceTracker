@@ -126,6 +126,24 @@ public class SplitController {
         return "redirect:/splits/groups/" + id;
     }
 
+    @PostMapping("/groups/{id}/settle")
+    public String settleBalance(@PathVariable String id,
+                                @RequestParam String withUserId,
+                                @RequestParam BigDecimal amount,
+                                @RequestParam boolean youOwe,
+                                RedirectAttributes redirectAttributes) {
+        try {
+            User currentUser = userService.getCurrentUser();
+            String fromUserId = youOwe ? currentUser.getId() : withUserId;
+            String toUserId   = youOwe ? withUserId : currentUser.getId();
+            localSplitService.recordSettlement(id, fromUserId, toUserId, amount);
+            redirectAttributes.addFlashAttribute("successMessage", "Balance marked as settled.");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Failed to record settlement: " + e.getMessage());
+        }
+        return "redirect:/splits/groups/" + id;
+    }
+
     @PostMapping("/invites/{id}/accept")
     public String acceptInvite(@PathVariable String id, RedirectAttributes redirectAttributes) {
         try {
