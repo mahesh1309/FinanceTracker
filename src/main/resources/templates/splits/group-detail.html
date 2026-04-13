@@ -142,17 +142,39 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-sm-4">
                         <label class="form-label fw-semibold mb-1 small">Category</label>
-                        <select id="filterSplitCategory" class="form-select form-select-sm">
-                            <option value="">All Categories</option>
-                            <option th:each="cat : ${categories}" th:value="${cat}" th:text="${cat}"></option>
-                        </select>
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 text-start"
+                                    type="button" id="filterSplitCategoryBtn" data-bs-toggle="dropdown"
+                                    data-bs-auto-close="outside" aria-expanded="false">
+                                All Categories
+                            </button>
+                            <ul class="dropdown-menu w-100 p-2" style="max-height:220px;overflow-y:auto;">
+                                <li th:each="cat : ${categories}">
+                                    <label class="dropdown-item d-flex align-items-center gap-2 py-1">
+                                        <input type="checkbox" class="split-cat-check form-check-input mt-0" th:value="${cat}">
+                                        <span th:text="${cat}"></span>
+                                    </label>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                     <div class="col-sm-4">
                         <label class="form-label fw-semibold mb-1 small">Store / Platform</label>
-                        <select id="filterSplitStore" class="form-select form-select-sm">
-                            <option value="">All Stores</option>
-                            <option th:each="src : ${sourcesOfPurchase}" th:value="${src}" th:text="${src}"></option>
-                        </select>
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 text-start"
+                                    type="button" id="filterSplitStoreBtn" data-bs-toggle="dropdown"
+                                    data-bs-auto-close="outside" aria-expanded="false">
+                                All Stores
+                            </button>
+                            <ul class="dropdown-menu w-100 p-2" style="max-height:220px;overflow-y:auto;">
+                                <li th:each="src : ${sourcesOfPurchase}">
+                                    <label class="dropdown-item d-flex align-items-center gap-2 py-1">
+                                        <input type="checkbox" class="split-store-check form-check-input mt-0" th:value="${src}">
+                                        <span th:text="${src}"></span>
+                                    </label>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                     <div class="col-sm-4">
                         <button id="clearSplitFilters" class="btn btn-outline-secondary btn-sm w-100">
@@ -466,30 +488,44 @@
         updateSharesSum();
     });
 
-    // Split filters
+    // Split filters (multi-select)
     (function () {
-        const filterCategory = document.getElementById('filterSplitCategory');
-        const filterStore = document.getElementById('filterSplitStore');
+        const catBtn   = document.getElementById('filterSplitCategoryBtn');
+        const storeBtn = document.getElementById('filterSplitStoreBtn');
         const clearBtn = document.getElementById('clearSplitFilters');
-        if (!filterCategory) return;
+        if (!catBtn) return;
 
-        function applyFilters() {
-            const cat = filterCategory.value;
-            const store = filterStore.value;
-            document.querySelectorAll('.split-card').forEach(function (card) {
-                const cardCat = card.dataset.category || '';
-                const cardStore = card.dataset.store || '';
-                const catMatch = !cat || cardCat === cat;
-                const storeMatch = !store || cardStore === store;
-                card.style.display = (catMatch && storeMatch) ? '' : 'none';
-            });
+        function getChecked(cls) {
+            return new Set(
+                Array.from(document.querySelectorAll('.' + cls + ':checked'))
+                     .map(function (el) { return el.value; })
+            );
         }
 
-        filterCategory.addEventListener('change', applyFilters);
-        filterStore.addEventListener('change', applyFilters);
+        function updateLabel(btn, set, allLabel) {
+            btn.textContent = set.size === 0 ? allLabel : Array.from(set).join(', ');
+        }
+
+        function applyFilters() {
+            const cats   = getChecked('split-cat-check');
+            const stores = getChecked('split-store-check');
+            document.querySelectorAll('.split-card').forEach(function (card) {
+                const cardCat   = card.dataset.category || '';
+                const cardStore = card.dataset.store    || '';
+                const catMatch   = cats.size   === 0 || cats.has(cardCat);
+                const storeMatch = stores.size === 0 || stores.has(cardStore);
+                card.style.display = (catMatch && storeMatch) ? '' : 'none';
+            });
+            updateLabel(catBtn,   getChecked('split-cat-check'),   'All Categories');
+            updateLabel(storeBtn, getChecked('split-store-check'), 'All Stores');
+        }
+
+        document.querySelectorAll('.split-cat-check, .split-store-check')
+            .forEach(function (cb) { cb.addEventListener('change', applyFilters); });
+
         clearBtn.addEventListener('click', function () {
-            filterCategory.value = '';
-            filterStore.value = '';
+            document.querySelectorAll('.split-cat-check, .split-store-check')
+                .forEach(function (cb) { cb.checked = false; });
             applyFilters();
         });
     })();
