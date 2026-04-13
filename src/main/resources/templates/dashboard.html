@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link th:href="@{/css/style.css}" rel="stylesheet">
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="/dashboard">
+            <i class="bi bi-wallet2 me-2"></i>Finance Tracker
+        </a>
+        <div class="ms-auto d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-2 text-white">
+                <img th:if="${currentUser.picture}" th:src="${currentUser.picture}"
+                     alt="avatar" class="rounded-circle" width="32" height="32">
+                <span class="d-none d-md-inline" th:text="${currentUser.name}"></span>
+            </div>
+            <form action="/logout" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <button type="submit" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-box-arrow-right me-1"></i>Logout
+                </button>
+            </form>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-4">
+
+    <!-- Flash messages -->
+    <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-2"></i><span th:text="${successMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-circle me-2"></i><span th:text="${errorMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="mainTabs">
+        <li class="nav-item">
+            <a class="nav-link" th:classappend="${activeTab == 'expenses'} ? 'active'"
+               href="/dashboard?tab=expenses">
+                <i class="bi bi-receipt me-1"></i>Expenses
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" th:classappend="${activeTab == 'splits'} ? 'active'"
+               href="/dashboard?tab=splits">
+                <i class="bi bi-people me-1"></i>Splits
+            </a>
+        </li>
+    </ul>
+
+    <!-- ===== EXPENSES TAB ===== -->
+    <div th:if="${activeTab == 'expenses'}">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0">My Expenses</h4>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+                <i class="bi bi-plus-circle me-1"></i>Add Expense
+            </button>
+        </div>
+
+        <!-- Expense Filters -->
+        <div th:unless="${expensesByMonth.isEmpty()}" class="card shadow-sm mb-3 p-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-4">
+                    <label class="form-label fw-semibold mb-1 small">Category</label>
+                    <select id="filterCategory" class="form-select form-select-sm">
+                        <option value="">All Categories</option>
+                        <option th:each="cat : ${categories}" th:value="${cat}" th:text="${cat}"></option>
+                    </select>
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label fw-semibold mb-1 small">Store / Platform</label>
+                    <select id="filterStore" class="form-select form-select-sm">
+                        <option value="">All Stores</option>
+                        <option th:each="src : ${sourcesOfPurchase}" th:value="${src}" th:text="${src}"></option>
+                    </select>
+                </div>
+                <div class="col-sm-4">
+                    <button id="clearExpenseFilters" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="bi bi-x-circle me-1"></i>Clear Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div th:if="${expensesByMonth.isEmpty()}" class="text-center py-5 text-muted">
+            <i class="bi bi-inbox" style="font-size:2.5rem;"></i>
+            <p class="mt-2">No expenses yet. Add your first expense!</p>
+        </div>
+
+        <!-- Monthly accordion -->
+        <div class="accordion" id="expensesAccordion" th:unless="${expensesByMonth.isEmpty()}">
+            <div class="accordion-item border-0 mb-3 shadow-sm rounded"
+                 th:each="entry, iter : ${expensesByMonth}">
+                <h2 class="accordion-header">
+                    <button class="accordion-button rounded"
+                            th:classappend="${iter.index > 0} ? 'collapsed'"
+                            type="button" data-bs-toggle="collapse"
+                            th:attr="data-bs-target='#collapse-' + ${iter.index},
+                                     aria-controls='collapse-' + ${iter.index}">
+                        <div class="d-flex align-items-center justify-content-between w-100 me-3">
+                            <span class="fw-semibold" th:text="${entry.key}"></span>
+                            <span class="badge bg-primary rounded-pill ms-2"
+                                  th:text="${#lists.size(entry.value)} + ' item(s)'"></span>
+                        </div>
+                    </button>
+                </h2>
+                <div th:id="'collapse-' + ${iter.index}"
+                     class="accordion-collapse collapse"
+                     th:classappend="${iter.index == 0} ? 'show'">
+                    <div class="accordion-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Description</th>
+                                        <th>Category</th>
+                                        <th>Store</th>
+                                        <th>Source</th>
+                                        <th class="text-end">Amount</th>
+                                        <th class="text-center">Type</th>
+                                        <th class="text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="expense-row"
+                                        th:each="expense : ${entry.value}"
+                                        th:attr="data-category=${expense.category},data-store=${expense.sourceOfPurchase}">
+                                        <td class="text-nowrap" th:text="${#temporals.format(expense.date, 'dd MMM')}"></td>
+                                        <td th:text="${expense.description}"></td>
+                                        <td>
+                                            <span th:if="${expense.category != null and !expense.category.isEmpty()}"
+                                                  class="badge bg-primary bg-opacity-75" th:text="${expense.category}"></span>
+                                            <span th:unless="${expense.category != null and !expense.category.isEmpty()}"
+                                                  class="text-muted small">—</span>
+                                        </td>
+                                        <td>
+                                            <span th:if="${expense.sourceOfPurchase != null and !expense.sourceOfPurchase.isEmpty()}"
+                                                  class="badge bg-success bg-opacity-75" th:text="${expense.sourceOfPurchase}"></span>
+                                            <span th:unless="${expense.sourceOfPurchase != null and !expense.sourceOfPurchase.isEmpty()}"
+                                                  class="text-muted small">—</span>
+                                        </td>
+                                        <td>
+                                            <span th:if="${expense.sourceOfPayment != null and !expense.sourceOfPayment.isEmpty()}"
+                                                  class="badge bg-secondary" th:text="${expense.sourceOfPayment}"></span>
+                                            <span th:unless="${expense.sourceOfPayment != null and !expense.sourceOfPayment.isEmpty()}"
+                                                  class="text-muted small">—</span>
+                                        </td>
+                                        <td class="text-end fw-semibold"
+                                            th:text="'₹' + ${#numbers.formatDecimal(expense.amount, 1, 2)}"></td>
+                                        <td class="text-center">
+                                            <span th:if="${expense.fromSplit}" class="badge bg-info text-dark">
+                                                <i class="bi bi-people-fill me-1"></i>Split
+                                            </span>
+                                            <span th:unless="${expense.fromSplit}" class="badge bg-light text-dark border">
+                                                Personal
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <form th:action="@{/expenses/delete/{id}(id=${expense.id})}"
+                                                  method="post"
+                                                  onsubmit="return confirm('Remove this expense?')">
+                                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                                <button type="submit" class="btn btn-link btn-sm text-danger p-0"
+                                                        title="Delete">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <td colspan="5" class="fw-semibold text-end">Month Total:</td>
+                                        <td class="text-end fw-bold text-primary">
+                                            <span th:text="'₹' + ${#numbers.formatDecimal(monthlyTotals[entry.key], 1, 2)}"></span>
+                                        </td>
+                                        <td colspan="2"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== SPLITS TAB ===== -->
+    <div th:if="${activeTab == 'splits'}">
+
+        <!-- Pending Invites -->
+        <div th:if="${!pendingInvites.isEmpty()}" class="mb-4">
+            <h5 class="mb-3"><i class="bi bi-bell me-2 text-warning"></i>Pending Invites</h5>
+            <div class="list-group shadow-sm">
+                <div class="list-group-item d-flex justify-content-between align-items-center py-3"
+                     th:each="invite : ${pendingInvites}">
+                    <div>
+                        <div class="fw-semibold" th:text="${invite.group.name}"></div>
+                        <div class="text-muted small">
+                            <i class="bi bi-person me-1"></i>Invited by
+                            <span th:text="${invite.invitedBy.name}"></span>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <form th:action="@{/splits/invites/{id}/accept(id=${invite.id})}" method="post">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button type="submit" class="btn btn-success btn-sm">
+                                <i class="bi bi-check-lg me-1"></i>Accept
+                            </button>
+                        </form>
+                        <form th:action="@{/splits/invites/{id}/reject(id=${invite.id})}" method="post">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                <i class="bi bi-x-lg me-1"></i>Reject
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0">My Split Groups</h4>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createGroupModal">
+                <i class="bi bi-plus-circle me-1"></i>Create Group
+            </button>
+        </div>
+
+        <div th:if="${splitGroups.isEmpty()}" class="text-center py-5 text-muted">
+            <i class="bi bi-people" style="font-size:2.5rem;"></i>
+            <p class="mt-2">No split groups yet. Create one to get started!</p>
+        </div>
+
+        <div class="row g-3" th:unless="${splitGroups.isEmpty()}">
+            <div class="col-md-4 col-sm-6" th:each="group : ${splitGroups}">
+                <div class="card h-100 shadow-sm group-card">
+                    <div class="card-body">
+                        <h5 class="card-title fw-semibold mb-1" th:text="${group.name}"></h5>
+                        <p class="text-muted small mb-2">
+                            <i class="bi bi-person me-1"></i>
+                            Created by
+                            <span th:text="${group.createdBy.name}"></span>
+                        </p>
+                        <p class="text-muted small mb-3">
+                            <i class="bi bi-people me-1"></i>
+                            <span th:text="${#lists.size(group.members)}"></span> member(s) &nbsp;·&nbsp;
+                            <i class="bi bi-receipt me-1"></i>
+                            <span th:text="${#lists.size(group.splits)}"></span> split(s)
+                        </p>
+                    </div>
+                    <div class="card-footer bg-transparent border-0 pt-0">
+                        <a th:href="@{/splits/groups/{id}(id=${group.id})}"
+                           class="btn btn-primary btn-sm w-100">
+                            <i class="bi bi-arrow-right-circle me-1"></i>Open Group
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Expense Modal -->
+<div class="modal fade" id="addExpenseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add Expense</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/expenses/add" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Amount <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" name="amount" class="form-control" step="0.01" min="0.01"
+                                   placeholder="0.00" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+                        <input type="text" name="description" class="form-control"
+                               placeholder="e.g. Groceries, Rent, Movie tickets" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Category <span class="text-danger">*</span></label>
+                        <select name="category" class="form-select" required>
+                            <option value="" disabled selected>Select category</option>
+                            <option th:each="cat : ${categories}"
+                                    th:value="${cat}" th:text="${cat}"></option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Source of Purchase <span class="text-muted small">(optional)</span></label>
+                        <select name="sourceOfPurchase" class="form-select">
+                            <option value="">Select store / platform</option>
+                            <option th:each="src : ${sourcesOfPurchase}"
+                                    th:value="${src}" th:text="${src}"></option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Source of Payment <span class="text-muted small">(optional)</span></label>
+                        <input type="text" name="sourceOfPayment" class="form-control"
+                               placeholder="e.g. UPI, Credit Card, Cash">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Date</label>
+                        <input type="date" name="date" class="form-control" id="expenseDateInput">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-1"></i>Add Expense
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Create Group Modal -->
+<div class="modal fade" id="createGroupModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-people me-2"></i>Create Split Group</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/splits/groups/create" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Group Name <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control"
+                               placeholder="e.g. Trip to Goa, Flatmates, Office Lunch" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-1"></i>Create Group
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Set today's date as default for expense date
+    document.getElementById('expenseDateInput').valueAsDate = new Date();
+
+    // Expense filters
+    (function () {
+        const filterCategory = document.getElementById('filterCategory');
+        const filterStore = document.getElementById('filterStore');
+        const clearBtn = document.getElementById('clearExpenseFilters');
+        if (!filterCategory) return;
+
+        function applyFilters() {
+            const cat = filterCategory.value;
+            const store = filterStore.value;
+            document.querySelectorAll('.accordion-item').forEach(function (accordion) {
+                let visibleRows = 0;
+                accordion.querySelectorAll('tr.expense-row').forEach(function (row) {
+                    const rowCat = row.dataset.category || '';
+                    const rowStore = row.dataset.store || '';
+                    const catMatch = !cat || rowCat === cat;
+                    const storeMatch = !store || rowStore === store;
+                    const visible = catMatch && storeMatch;
+                    row.style.display = visible ? '' : 'none';
+                    if (visible) visibleRows++;
+                });
+                accordion.style.display = visibleRows === 0 ? 'none' : '';
+            });
+        }
+
+        filterCategory.addEventListener('change', applyFilters);
+        filterStore.addEventListener('change', applyFilters);
+        clearBtn.addEventListener('click', function () {
+            filterCategory.value = '';
+            filterStore.value = '';
+            applyFilters();
+        });
+    })();
+</script>
+</body>
+</html>
