@@ -15,11 +15,12 @@ import java.util.stream.Collectors;
 @Service
 public class LocalSplitService {
 
-    private static final String GROUPS    = "split_groups";
-    private static final String MEMBERS   = "split_members";
-    private static final String SPLITS    = "splits";
-    private static final String PARTS     = "split_participants";
-    private static final String INVITES   = "group_invites";
+    private static final String GROUPS      = "split_groups";
+    private static final String MEMBERS     = "split_members";
+    private static final String SPLITS      = "splits";
+    private static final String PARTS       = "split_participants";
+    private static final String INVITES     = "group_invites";
+    private static final String SETTLEMENTS = "settlements";
 
     @Autowired private LocalJsonStore store;
     @Autowired private LocalExpenseService localExpenseService;
@@ -176,7 +177,7 @@ public class LocalSplitService {
         return buildSplit(sd);
     }
 
-    // ---- Balance Summary (same logic as SplitService) ----
+    // ---- Balance Summary ----
 
     public List<Map<String, Object>> getBalanceSummary(SplitGroup group, User currentUser) {
         Map<String, BigDecimal> netByUserId = new LinkedHashMap<>();
@@ -198,6 +199,19 @@ public class LocalSplitService {
             }
         }
 
+        // Apply settlements: offset the net balance for each settled pair
+        store.readAll(SETTLEMENTS, LocalSettlementData.class).stream()
+            .filter(s -> group.getId().equals(s.groupId))
+            .forEach(s -> {
+                if (s.fromUserId.equals(currentUser.getId())) {
+                    // currentUser paid toUser → reduce what currentUser owes
+                    netByUserId.merge(s.toUserId, s.amount, BigDecimal::add);
+                } else if (s.toUserId.equals(currentUser.getId())) {
+                    // fromUser paid currentUser → reduce what fromUser owes
+                    netByUserId.merge(s.fromUserId, s.amount.negate(), BigDecimal::add);
+                }
+            });
+
         List<Map<String, Object>> result = new ArrayList<>();
         netByUserId.forEach((userId, amount) -> {
             if (amount.compareTo(BigDecimal.ZERO) == 0) return;
@@ -208,6 +222,24 @@ public class LocalSplitService {
             result.add(entry);
         });
         return result;
+    }
+
+    public void recordSettlement(String groupId, String fromUserId, String toUserId, BigDecimal amount) {
+        // Remove any existing settlement for this pair in this group before saving a new one
+        store.readAll(SETTLEMENTS, LocalSettlementData.class).stream()
+            .filter(s -> groupId.equals(s.groupId)
+                    && s.fromUserId.equals(fromUserId)
+                    && s.toUserId.equals(toUserId))
+            .forEach(s -> store.deleteById(SETTLEMENTS, s.id, LocalSettlementData.class));
+
+        LocalSettlementData s = new LocalSettlementData();
+        s.id = store.generateId();
+        s.groupId = groupId;
+        s.fromUserId = fromUserId;
+        s.toUserId = toUserId;
+        s.amount = amount;
+        s.settledAt = LocalDateTime.now();
+        store.save(SETTLEMENTS, s, LocalSettlementData.class);
     }
 
     // ---- Builders ----
