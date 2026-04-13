@@ -71,7 +71,7 @@ public class LocalExpenseService {
 
     // Called by LocalSplitService when adding a split expense
     public void addSplitExpense(User participant, BigDecimal amount, String description,
-                                 LocalDate date, String splitId) {
+                                 LocalDate date, String splitId, String category, String sourceOfPurchase) {
         LocalExpenseData data = new LocalExpenseData();
         data.id = store.generateId();
         data.userId = participant.getId();
@@ -80,6 +80,8 @@ public class LocalExpenseService {
         data.date = date;
         data.fromSplit = true;
         data.splitId = splitId;
+        data.category = category;
+        data.sourceOfPurchase = sourceOfPurchase;
         store.save(STORE, data, LocalExpenseData.class);
     }
 
