@@ -108,8 +108,8 @@
                         <div th:if="${balances.isEmpty()}" class="text-success small">
                             <i class="bi bi-check-circle me-1"></i>All settled up!
                         </div>
-                        <div th:each="b : ${balances}" class="d-flex justify-content-between align-items-center py-1 border-bottom">
-                            <div class="d-flex align-items-center gap-2">
+                        <div th:each="b : ${balances}" class="d-flex justify-content-between align-items-center py-2 border-bottom gap-2">
+                            <div class="d-flex align-items-center gap-2 flex-grow-1">
                                 <img th:if="${b.user.picture}" th:src="${b.user.picture}"
                                      class="rounded-circle" width="24" height="24" alt="">
                                 <i th:unless="${b.user.picture}" class="bi bi-person-circle text-muted"></i>
@@ -120,8 +120,19 @@
                                 </div>
                             </div>
                             <span th:classappend="${b.youOwe} ? 'text-danger' : 'text-success'"
-                                  class="fw-bold small"
+                                  class="fw-bold small me-2"
                                   th:text="'₹' + ${#numbers.formatDecimal(b.amount, 1, 2)}"></span>
+                            <form th:action="@{/splits/groups/{id}/settle(id=${group.id})}" method="post" class="mb-0">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                <input type="hidden" name="withUserId" th:value="${b.user.id}">
+                                <input type="hidden" name="amount" th:value="${b.amount}">
+                                <input type="hidden" name="youOwe" th:value="${b.youOwe}">
+                                <button type="submit" class="btn btn-outline-success btn-sm"
+                                        style="font-size:0.72rem;white-space:nowrap;"
+                                        th:title="'Mark ₹' + ${#numbers.formatDecimal(b.amount, 1, 2)} + ' as settled with ' + ${b.user.name}">
+                                    <i class="bi bi-check2-circle me-1"></i>Mark Settled
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
