@@ -74,17 +74,39 @@
             <div class="row g-2 align-items-end">
                 <div class="col-sm-4">
                     <label class="form-label fw-semibold mb-1 small">Category</label>
-                    <select id="filterCategory" class="form-select form-select-sm">
-                        <option value="">All Categories</option>
-                        <option th:each="cat : ${categories}" th:value="${cat}" th:text="${cat}"></option>
-                    </select>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 text-start"
+                                type="button" id="filterCategoryBtn" data-bs-toggle="dropdown"
+                                data-bs-auto-close="outside" aria-expanded="false">
+                            All Categories
+                        </button>
+                        <ul class="dropdown-menu w-100 p-2" id="filterCategoryMenu" style="max-height:220px;overflow-y:auto;">
+                            <li th:each="cat : ${categories}">
+                                <label class="dropdown-item d-flex align-items-center gap-2 py-1">
+                                    <input type="checkbox" class="expense-cat-check form-check-input mt-0" th:value="${cat}">
+                                    <span th:text="${cat}"></span>
+                                </label>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
                 <div class="col-sm-4">
                     <label class="form-label fw-semibold mb-1 small">Store / Platform</label>
-                    <select id="filterStore" class="form-select form-select-sm">
-                        <option value="">All Stores</option>
-                        <option th:each="src : ${sourcesOfPurchase}" th:value="${src}" th:text="${src}"></option>
-                    </select>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 text-start"
+                                type="button" id="filterStoreBtn" data-bs-toggle="dropdown"
+                                data-bs-auto-close="outside" aria-expanded="false">
+                            All Stores
+                        </button>
+                        <ul class="dropdown-menu w-100 p-2" id="filterStoreMenu" style="max-height:220px;overflow-y:auto;">
+                            <li th:each="src : ${sourcesOfPurchase}">
+                                <label class="dropdown-item d-flex align-items-center gap-2 py-1">
+                                    <input type="checkbox" class="expense-store-check form-check-input mt-0" th:value="${src}">
+                                    <span th:text="${src}"></span>
+                                </label>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
                 <div class="col-sm-4">
                     <button id="clearExpenseFilters" class="btn btn-outline-secondary btn-sm w-100">
@@ -367,36 +389,50 @@
     // Set today's date as default for expense date
     document.getElementById('expenseDateInput').valueAsDate = new Date();
 
-    // Expense filters
+    // Expense filters (multi-select)
     (function () {
-        const filterCategory = document.getElementById('filterCategory');
-        const filterStore = document.getElementById('filterStore');
+        const catBtn   = document.getElementById('filterCategoryBtn');
+        const storeBtn = document.getElementById('filterStoreBtn');
         const clearBtn = document.getElementById('clearExpenseFilters');
-        if (!filterCategory) return;
+        if (!catBtn) return;
+
+        function getChecked(cls) {
+            return new Set(
+                Array.from(document.querySelectorAll('.' + cls + ':checked'))
+                     .map(function (el) { return el.value; })
+            );
+        }
+
+        function updateLabel(btn, set, allLabel) {
+            btn.textContent = set.size === 0 ? allLabel : Array.from(set).join(', ');
+        }
 
         function applyFilters() {
-            const cat = filterCategory.value;
-            const store = filterStore.value;
+            const cats   = getChecked('expense-cat-check');
+            const stores = getChecked('expense-store-check');
             document.querySelectorAll('.accordion-item').forEach(function (accordion) {
                 let visibleRows = 0;
                 accordion.querySelectorAll('tr.expense-row').forEach(function (row) {
-                    const rowCat = row.dataset.category || '';
-                    const rowStore = row.dataset.store || '';
-                    const catMatch = !cat || rowCat === cat;
-                    const storeMatch = !store || rowStore === store;
+                    const rowCat   = row.dataset.category || '';
+                    const rowStore = row.dataset.store    || '';
+                    const catMatch   = cats.size   === 0 || cats.has(rowCat);
+                    const storeMatch = stores.size === 0 || stores.has(rowStore);
                     const visible = catMatch && storeMatch;
                     row.style.display = visible ? '' : 'none';
                     if (visible) visibleRows++;
                 });
                 accordion.style.display = visibleRows === 0 ? 'none' : '';
             });
+            updateLabel(catBtn,   getChecked('expense-cat-check'),   'All Categories');
+            updateLabel(storeBtn, getChecked('expense-store-check'), 'All Stores');
         }
 
-        filterCategory.addEventListener('change', applyFilters);
-        filterStore.addEventListener('change', applyFilters);
+        document.querySelectorAll('.expense-cat-check, .expense-store-check')
+            .forEach(function (cb) { cb.addEventListener('change', applyFilters); });
+
         clearBtn.addEventListener('click', function () {
-            filterCategory.value = '';
-            filterStore.value = '';
+            document.querySelectorAll('.expense-cat-check, .expense-store-check')
+                .forEach(function (cb) { cb.checked = false; });
             applyFilters();
         });
     })();
