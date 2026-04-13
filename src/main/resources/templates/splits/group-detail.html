@@ -205,10 +205,12 @@
                  th:attr="data-category=${split.category},data-store=${split.sourceOfPurchase}">
                 <div class="card-header d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="d-flex align-items-center gap-2 mb-1">
+                        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
                             <h6 class="mb-0 fw-semibold" th:text="${split.description}"></h6>
                             <span th:if="${split.category != null and !split.category.isEmpty()}"
                                   class="badge bg-primary bg-opacity-75" th:text="${split.category}"></span>
+                            <span th:if="${split.sourceOfPurchase != null and !split.sourceOfPurchase.isEmpty()}"
+                                  class="badge bg-success bg-opacity-75" th:text="${split.sourceOfPurchase}"></span>
                         </div>
                         <small class="text-muted">
                             Added by <span th:text="${split.addedBy.name}"></span> ·
