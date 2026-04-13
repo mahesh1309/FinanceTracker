@@ -171,7 +171,7 @@ public class LocalSplitService {
             localExpenseService.addSplitExpense(
                 participant, entry.getValue(),
                 "Split: " + description + " (Group: " + group.getName() + ")",
-                LocalDate.now(), sd.id);
+                LocalDate.now(), sd.id, category, sourceOfPurchase);
         }
 
         return buildSplit(sd);
