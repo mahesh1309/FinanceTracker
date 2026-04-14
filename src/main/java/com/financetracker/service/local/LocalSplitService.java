@@ -177,6 +177,75 @@ public class LocalSplitService {
         return buildSplit(sd);
     }
 
+    public void deleteSplit(String splitId, User currentUser) {
+        LocalSplitData sd = store.readAll(SPLITS, LocalSplitData.class).stream()
+            .filter(s -> splitId.equals(s.id))
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("Split not found"));
+
+        boolean isMember = store.readAll(MEMBERS, LocalSplitGroupMemberData.class).stream()
+            .anyMatch(m -> sd.groupId.equals(m.groupId) && currentUser.getId().equals(m.userId));
+        if (!isMember) throw new RuntimeException("Access denied: you are not a member of this group");
+
+        List<String> partIds = store.readAll(PARTS, LocalSplitParticipantData.class).stream()
+            .filter(p -> splitId.equals(p.splitId))
+            .map(p -> p.id)
+            .toList();
+        partIds.forEach(id -> store.deleteById(PARTS, id, LocalSplitParticipantData.class));
+
+        localExpenseService.deleteSplitExpenses(splitId);
+        store.deleteById(SPLITS, splitId, LocalSplitData.class);
+    }
+
+    public Split editSplit(String splitId, String description, BigDecimal totalAmount,
+                           Map<String, BigDecimal> participantAmounts, User currentUser,
+                           String category, String sourceOfPurchase) {
+        LocalSplitData sd = store.readAll(SPLITS, LocalSplitData.class).stream()
+            .filter(s -> splitId.equals(s.id))
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("Split not found"));
+
+        boolean isMember = store.readAll(MEMBERS, LocalSplitGroupMemberData.class).stream()
+            .anyMatch(m -> sd.groupId.equals(m.groupId) && currentUser.getId().equals(m.userId));
+        if (!isMember) throw new RuntimeException("Access denied: you are not a member of this group");
+
+        // Remove old participants and their linked expenses
+        List<String> oldPartIds = store.readAll(PARTS, LocalSplitParticipantData.class).stream()
+            .filter(p -> splitId.equals(p.splitId))
+            .map(p -> p.id)
+            .toList();
+        oldPartIds.forEach(id -> store.deleteById(PARTS, id, LocalSplitParticipantData.class));
+        localExpenseService.deleteSplitExpenses(splitId);
+
+        // Update split record (preserve id, groupId, addedById, createdAt)
+        sd.description = description;
+        sd.category = category;
+        sd.sourceOfPurchase = sourceOfPurchase;
+        sd.totalAmount = totalAmount;
+        store.save(SPLITS, sd, LocalSplitData.class);
+
+        SplitGroup group = buildGroupShallow(sd.groupId);
+
+        for (Map.Entry<String, BigDecimal> entry : participantAmounts.entrySet()) {
+            User participant = userRepository.findById(entry.getKey())
+                .orElseThrow(() -> new RuntimeException("Participant user not found: " + entry.getKey()));
+
+            LocalSplitParticipantData pd = new LocalSplitParticipantData();
+            pd.id = store.generateId();
+            pd.splitId = splitId;
+            pd.userId = participant.getId();
+            pd.amount = entry.getValue();
+            store.save(PARTS, pd, LocalSplitParticipantData.class);
+
+            localExpenseService.addSplitExpense(
+                participant, entry.getValue(),
+                "Split: " + description + " (Group: " + group.getName() + ")",
+                LocalDate.now(), splitId, category, sourceOfPurchase);
+        }
+
+        return buildSplit(sd);
+    }
+
     // ---- Balance Summary ----
 
     public List<Map<String, Object>> getBalanceSummary(SplitGroup group, User currentUser) {
@@ -225,19 +294,26 @@ public class LocalSplitService {
     }
 
     public void recordSettlement(String groupId, String fromUserId, String toUserId, BigDecimal amount) {
-        // Remove any existing settlement for this pair in this group before saving a new one
-        store.readAll(SETTLEMENTS, LocalSettlementData.class).stream()
+        // Accumulate any existing settlement for this pair so repeated settlements add up correctly
+        List<LocalSettlementData> existing = store.readAll(SETTLEMENTS, LocalSettlementData.class).stream()
             .filter(s -> groupId.equals(s.groupId)
                     && s.fromUserId.equals(fromUserId)
                     && s.toUserId.equals(toUserId))
-            .forEach(s -> store.deleteById(SETTLEMENTS, s.id, LocalSettlementData.class));
+            .collect(Collectors.toList());
+
+        BigDecimal accumulated = existing.stream()
+            .map(s -> s.amount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .add(amount);
+
+        existing.forEach(s -> store.deleteById(SETTLEMENTS, s.id, LocalSettlementData.class));
 
         LocalSettlementData s = new LocalSettlementData();
         s.id = store.generateId();
         s.groupId = groupId;
         s.fromUserId = fromUserId;
         s.toUserId = toUserId;
-        s.amount = amount;
+        s.amount = accumulated;
         s.settledAt = LocalDateTime.now();
         store.save(SETTLEMENTS, s, LocalSettlementData.class);
     }
