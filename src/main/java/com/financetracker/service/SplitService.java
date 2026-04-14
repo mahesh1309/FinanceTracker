@@ -150,6 +150,13 @@ public class SplitService {
                           Map<String, BigDecimal> participantAmounts, User currentUser, String category) {
         SplitGroup group = getGroupWithMemberCheck(groupId, currentUser);
 
+        BigDecimal participantTotal = participantAmounts.values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (participantTotal.compareTo(totalAmount) != 0) {
+            throw new IllegalArgumentException(
+                "Participant amounts (" + participantTotal + ") do not match total amount (" + totalAmount + ")");
+        }
+
         Split split = new Split();
         split.setGroup(group);
         split.setAddedBy(currentUser);
